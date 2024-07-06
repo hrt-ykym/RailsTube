@@ -30,6 +30,9 @@ rescue ActiveRecord::PendingMigrationError => e
   abort e.to_s.strip
 end
 RSpec.configure do |config|
+  # 使用するフォーマッタの設定
+  config.formatter = Fuubar
+  config.fuubar_progress_bar_options = { format: 'Progress: |%B| %p%% %a' }
   # Remove this line if you're not using ActiveRecord or ActiveRecord fixtures
   config.fixture_paths = [
     Rails.root.join('spec/fixtures')
