@@ -75,3 +75,62 @@ end
 ```
 
 これにて準備は完了！やっていきましょう！
+
+# ホーム画面の作成
+まずは画面に自分が作ったものが表示されて欲しいので、ホーム画面を作成します。
+今回やるタスクは以下の通り。
+- homeアクションを追加
+  - 正しくレスポンスが返ってくること
+
+俺たちはテスト駆動開発(TDD)をしっているので、まずはテストを書いていきます。
+
+```ruby
+rails generate rspec:request home
+```
+今回満たしたいのは、以下の2点
+- `/home`にアクセスしたときに、HTTPステータスコード200が返ってくること
+- ルート(`/`)にアクセスしたときに、HTTPステータスコード200が返ってくること
+
+
+`spec/requests/home_spec.rb`
+```ruby
+require 'rails_helper'
+
+RSpec.describe "StaticPages", type: :request do
+  describe "GET /" do
+    it "responds successfully with an HTTP 200 status code" do
+      get root_path
+      expect(response).to have_http_status(200)
+    end
+  end
+
+  describe "GET /home" do
+    it "responds successfully with an HTTP 200 status code" do
+      get home_path
+      expect(response).to have_http_status(200)
+    end
+  end
+end
+```
+
+ではこれをGreenにしていきましょう。
+`config/routes.rb`に以下を追加します。
+```ruby
+Rails.application.routes.draw do
+  root 'static_pages#home'
+  get 'home', to: 'static_pages#home'
+end
+```
+これで、`root_path`や`home_path`が使えるようになりますね。Railsチュートリアルで習いましたね！(演習問題でもあったので、忘れるはずないですよね!)
+
+次に、コントローラーを作成します。
+```ruby
+rails generate controller StaticPages home
+```
+次にViewを作成します。
+`app/views/static_pages/home.html.erb`
+
+```html
+<h1>Welcome to RailsTube!</h1>
+```
+これで、テストが通るはずです！TDD最高！
