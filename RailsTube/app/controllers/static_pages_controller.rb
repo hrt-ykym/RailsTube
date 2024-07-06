@@ -4,4 +4,7 @@ class StaticPagesController < ApplicationController
 
   def short
   end
+
+  def channels
+  end
 end

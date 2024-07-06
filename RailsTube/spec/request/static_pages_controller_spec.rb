@@ -15,5 +15,10 @@ RSpec.describe "StaticPages", type: :request do
     end
   end
   
-  describe "GET /
+  describe "GET /channels" do
+    it "responds successfully with an HTTP 200 status code" do
+      get channels_path
+      expect(response).to have_http_status(200)
+    end
+  end
 end
