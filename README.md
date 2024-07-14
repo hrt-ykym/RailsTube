@@ -395,15 +395,15 @@ end
 `app/views/users/new.html.erb`
 ```erb
 <%= form_with(model: @user) do |f| %>
-  <%= f.label(:name) %>
+  <%= f.label(:name, '名前') %>
   <%= f.text_field(:name) %>
-  <%= f.label(:email)%>
+  <%= f.label(:email, 'Email')%>
   <%= f.email_field(:email) %>
-  <%= f.label(:password) %>
+  <%= f.label(:password, 'パスワード') %>
   <%= f.password_field(:password) %>
-  <%= f.label(:password_confirmation)%>
+  <%= f.label(:password_confirmation, 'パスワード確認')%>
   <%= f.password_field(:password_confirmation)%>
-  <%= f.submit("Create my account")%>
+  <%= f.submit("アカウントを作成")%>
 <% end %>
 ```
 自分も忘れてたので、解説しておくと、`form_with`メソッドは、引数である`model: @user`によって、`@user`を使ってフォームを作成することができます。ここでの@userは、`new`アクションで作成した`User.new`のインスタンス変数ですね。MVCコントローラを考えると、コントローラーの`new`アクションでインスタンス変数を作成して、それをViewに渡すという流れですね。
@@ -480,5 +480,243 @@ end
 ```
 
 これにて、一連のユーザー登録機能の作成は完了です！テストも作成しましょう。
+
 ## ユーザー登録機能のテスト
-ユーザー登録機能のテストを書きましょう。今回は以下のテストを書きます。
+ユーザー登録機能のテストを書きましょう。
+```ruby
+rails g rspec:feature UserSignups
+```
+
+`spec/features/user_signups_spec.rb`
+```ruby
+require 'rails_helper'
+
+RSpec.feature "UserSignups", type: :feature do
+  scenario "ユーザーがサインアップする" do
+    visit signup_path
+    expect {
+    fill_in "名前", with: "Example User"
+    fill_in "Email", with: "user@example.com"
+    fill_in "パスワード", with: "password"
+    fill_in "パスワード確認", with: "password"
+    click_button "アカウントを作成"
+    }.to change(User, :count).by(1)
+  end
+end
+```
+
+
+# ログイン機能の実装
+ユーザー登録機能ができたので、次はログイン機能を実装していきましょう。
+
+## sessionコントローラの作成
+まずは、セッション管理を行うためのコントローラを作成します。
+```ruby
+rails generate controller Sessions new create destroy
+```
+
+## ルートの設定
+ログインにあたっては、
+- ログインフォームを表示するための`new`アクション (GETリクエスト)
+- ログイン処理を行うための`create`アクション (POSTリクエスト)
+- ログアウト処理を行うための`destroy`アクション (DELETEリクエスト)
+
+が必要となる。これをルーティングに設定する。
+
+`config/routes.rb`
+```ruby
+Rails.application.routes.draw do
+  root 'static_pages#home'
+  get '/home', to: 'static_pages#home'
+  get '/signup', to: 'users#new'
+  resources :users, only: [:new, :create, :show]
+  get    '/login',   to: 'sessions#new'
+  post   '/login',   to: 'sessions#create'
+  delete '/logout',  to: 'sessions#destroy'
+end
+```
+
+## リクエストテストの作成
+ログイン機能のテストを書きましょう。
+```ruby
+rails g rspec:request sessions
+```
+
+`spec/requests/sessions_spec.rb`
+```ruby
+require 'rails_helper'
+
+RSpec.describe "Sessions", type: :request do
+  describe "GET /login" do
+    it "returns http success" do
+      get login_path
+      expect(response).to have_http_status(:success)
+    end
+  end
+end
+```
+
+## ログインフォームの作成
+ログインフォームを作成しましょう。
+
+`app/views/sessions/new.html.erb`
+```erb
+<h1>Log in</h1>
+<%= form_with(scope: :session, url: login_path) do |f| %>
+  <%= f.label(:email, 'Email') %>
+  <%= f.email_field(:email) %>
+  <%= f.label(:password, 'パスワード') %>
+  <%= f.password_field(:password) %>
+  <%= f.submit("ログイン") %>
+<% end %>
+<%= link_to "Sign up now!", signup_path %>
+```
+今回、`form_with`メソッドの引数に`scope: :session`と`url: login_path`を指定しています。これによりログインフォームが送信されたときに、`POST /login`リクエストが送信されるようになります。つまり、params[:email]とparams[:password]が`SessionsController`の`create`アクションに送信されるということですね。
+
+## ログイン処理のテスト
+ログイン処理のテストを書きましょう。
+
+`spec/features/sessions_spec.rb`
+```ruby
+require 'rails_helper'
+
+RSpec.describe "Sessions", type: :request do
+  describe "GET /login" do
+    it "returns http success" do
+      get login_path
+      expect(response).to have_http_status(:success)
+    end
+  end
+
+  describe "POST /login" do
+    before do
+      @user = User.create(name: "Example User", email: "user@example.com", password: "password", password_confirmation: "password")
+    end
+    it "ログイン成功" do
+      post login_path, params: { session: { email: @user.email, password: @user.password } }
+      expect(response).to redirect_to(@user)
+    end
+
+    it "ログイン失敗" do
+      post login_path, params: { session: { email: @user.email, password: "invalid" } }
+      expect(response).to render_template('new')
+    end
+  end
+end
+```
+
+いま、このままだとテストが通らないですね。なぜかというと、POSTリクエストを担う、`SessionsController`の`create`アクションがまだ実装されていないからです。では、実装していきましょう。
+
+## ログイン処理の実装
+ログインのPOSTリクエストを送った時に動いてほしい挙動は以下ですね。
+- フォームから送信されたemailとpasswordを取得
+- ユーザーがデータベースに存在し、かつパスワードが正しい場合はログインする。
+- 正しくない場合はエラーメッセージを表示して、ログインフォームを再表示する。
+
+これをcreateアクションに実装しましょう。
+
+`app/controllers/sessions_controller.rb`
+```ruby
+class SessionsController < ApplicationController
+  include SessionsHelper
+  def new
+  end
+
+  def create
+    user = User.find_by(email: params[:session][:email].downcase)
+    if user && user.authenticate(params[:session][:password])
+      reset_session
+      log_in(user)
+      redirect_to user
+    else
+      flash.now[:danger] = 'Invalid email/password combination'
+      render 'new', status: :unprocessable_entity
+    end
+  end
+
+  def destroy
+  end
+end
+```
+なお、`SessionsHelper`に以下を定義します。
+- log_inメソッド: セッションにユーザーIDを保存
+- current_userメソッド: 現在ログインしているユーザーを返す
+- logged_in?メソッド: ユーザーがログインしているかどうかを返す
+- log_outメソッド: セッションからユーザーIDを削除
+
+
+`app/helpers/sessions_helper.rb`
+```ruby
+module SessionsHelper
+  def log_in(user)
+    # session[:user_id] = user.id`: ユーザーのブラウザ内の一時cookiesに暗号化されたユーザーIDを保存
+    session[:user_id] = user.id
+  end
+
+  def current_user
+    if session[:user_id]
+      @current_user ||= User.find_by(id: session[:user_id])
+    end
+  end
+
+  def logged_in?
+    !current_user.nil?
+  end
+
+  def log_out
+    session.delete(:user_id)
+    @current_user = nil
+  end
+end
+```
+これでログイン処理の実装は完了です。
+
+### ログイン失敗時の実装
+いま、ログイン失敗時にはエラーメッセージを表示してログインフォームを再表示するようにしています。しかし、このままだとエラーメッセージが表示されません。なぜかというと、`flash.now`をしたとしても、ヘッダーなどを設定していないからです。
+まずは、コントローラー全体で使えるように、`app/controllers/application_controller.rb`に以下を追加します。
+```ruby
+class ApplicationController < ActionController::Base
+  include SessionsHelper
+end
+```
+次に、`app/views/layouts/application.html.erb`に以下を追加します。
+```erb
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>RailsTube</title>
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+    <%= stylesheet_link_tag 'application', media: 'all', 'data-turbolinks-track': 'reload' %>
+    <%= javascript_include_tag 'application', 'data-turbolinks-track': 'reload' %>
+  </head>
+  <body>
+    <%= render 'layouts/header' %>
+    <% flash.each do |key, value| %>
+      <div class="flash <%= key %>"><%= value %></div>
+    <% end %>
+    <%= yield %>
+  </body>
+</html>
+```
+そして、headerを作成します。
+
+`app/views/layouts/_header.html.erb`
+```erb
+<header>
+  <nav>
+    <ul>
+      <li><%= link_to "Home", root_path %></li>
+      <% if logged_in? %>
+        <li><%= link_to "Profile", current_user %></li>
+        <li><%= link_to "Log out", logout_path, method: :delete %></li>
+      <% else %>
+        <li><%= link_to "Log in", login_path %></li>
+        <li><%= link_to "Sign up", signup_path %></li>
+      <% end %>
+    </ul>
+  </nav>
+</header>
+```
+
+これで、ログイン失敗時にエラーメッセージが表示されるようになりました。そして、テストコードも問題なく通るはずです。
