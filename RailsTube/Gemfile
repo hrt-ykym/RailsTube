@@ -73,3 +73,6 @@ group :development, :test do
     # テスト結果をわかりやすく表示するためのライブラリ
     gem 'fuubar'
 end
+
+# ユーザー認証のためのライブラリ
+gem 'bcrypt'
