@@ -1,11 +1,11 @@
 <%= form_with(model: @user) do |f| %>
-  <%= f.label(:name) %>
+  <%= f.label(:name, '名前') %>
   <%= f.text_field(:name) %>
-  <%= f.label(:email)%>
+  <%= f.label(:email, 'Email')%>
   <%= f.email_field(:email) %>
-  <%= f.label(:password) %>
+  <%= f.label(:password, 'パスワード') %>
   <%= f.password_field(:password) %>
-  <%= f.label(:password_confirmation)%>
+  <%= f.label(:password_confirmation, 'パスワード確認')%>
   <%= f.password_field(:password_confirmation)%>
-  <%= f.submit("Create my account")%>
+  <%= f.submit("アカウントを作成")%>
 <% end %>
